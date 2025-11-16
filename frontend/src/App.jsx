@@ -7,12 +7,11 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [debugInfo, setDebugInfo] = useState(null) // raw server/body info for debugging
 
-  // Basic client-side URL sanity check and normalization
   const normalizeUrl = (input) => {
     if (!input) return ''
     const trimmed = input.trim()
-    // If user omitted scheme, assume https
     if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
       return `https://${trimmed}`
     }
@@ -28,15 +27,12 @@ function App() {
     }
   }
 
-  // Create a conservative custom code to reduce collisions:
-  // {hostname-first6}-{random4}
   const buildCustomCode = (original) => {
     try {
       const urlObj = new URL(original)
       const hostPart = urlObj.hostname.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toLowerCase()
       const rand = Math.random().toString(36).substring(2, 6)
-      const code = (hostPart ? `${hostPart}-${rand}` : rand).toLowerCase()
-      return code
+      return (hostPart ? `${hostPart}-${rand}` : rand).toLowerCase()
     } catch {
       return Math.random().toString(36).substring(2, 8)
     }
@@ -47,28 +43,40 @@ function App() {
     setError('')
     setShortUrl('')
     setCopied(false)
+    setDebugInfo(null)
 
     const normalized = normalizeUrl(url)
     if (!normalized) {
       setError('Please enter a URL')
+      console.warn('validate: empty or whitespace URL')
       return
     }
     if (!isValidHttpUrl(normalized)) {
       setError('Please enter a valid http(s) URL')
+      console.warn('validate: url failed protocol check', normalized)
+      return
+    }
+
+    if (!API_URL) {
+      setError('Configuration error: API_URL is not defined')
+      console.error('API_URL missing', API_URL)
       return
     }
 
     setLoading(true)
 
     try {
+      console.info('Request starting', { original: normalized, api: API_URL })
       const token = await getAuthToken()
-      if (!token) throw new Error('Authentication failed')
+      console.info('Token from getAuthToken():', token ? 'present' : token)
 
-      const customCode = buildCustomCode(normalized)
+      if (!token || typeof token !== 'string') {
+        throw new Error('Authentication failed: token missing or invalid')
+      }
 
       const payload = {
         original_url: normalized,
-        custom_code: customCode,
+        custom_code: buildCustomCode(normalized),
         expires_in_days: 30,
         title: '',
         description: '',
@@ -77,9 +85,9 @@ function App() {
       }
 
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 15000) // 15s timeout
+      const timeout = setTimeout(() => controller.abort(), 15000)
 
-      const response = await fetch(`${API_URL}/v1/shorten/create`, {
+      const resp = await fetch(`${API_URL}/v1/shorten/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,38 +99,46 @@ function App() {
 
       clearTimeout(timeout)
 
-      // handle non-json responses safely
-      let data = null
-      const contentType = response.headers.get('content-type') || ''
-      if (contentType.includes('application/json')) {
-        data = await response.json()
-      } else {
-        const text = await response.text()
-        // Try to parse JSON if server mis-set header
-        try {
-          data = JSON.parse(text)
-        } catch {
-          data = { message: text || response.statusText }
-        }
+      const rawText = await resp.text().catch((err) => {
+        console.error('Failed to read response text', err)
+        return ''
+      })
+
+      let body = null
+      try {
+        body = rawText ? JSON.parse(rawText) : null
+      } catch {
+        body = { raw: rawText }
       }
 
-      if (!response.ok) {
-        const msg = data?.detail || data?.message || `Server responded with ${response.status}`
-        throw new Error(msg)
+      console.info('Network response', { status: resp.status, ok: resp.ok, headers: [...resp.headers] })
+      console.debug('Response body', body)
+
+      setDebugInfo({
+        status: resp.status,
+        ok: resp.ok,
+        headers: Array.from(resp.headers.entries()),
+        body,
+        rawText,
+      })
+
+      if (!resp.ok) {
+        const serverMsg = body?.detail || body?.message || body?.raw || `status ${resp.status}`
+        throw new Error(`Backend error: ${serverMsg}`)
       }
 
-      // Typical API surface: prefer absolute short_url, fallback to constructing from code
-      const finalShort = data.short_url || (data.short_code ? `${window.location.origin}/${data.short_code}` : null)
-      if (!finalShort) throw new Error('Invalid response from server')
+      const short = body?.short_url || (body?.short_code ? `${window.location.origin}/${body.short_code}` : null)
+      if (!short) {
+        console.error('Missing short_url in API response', body)
+        throw new Error('Invalid response from server: short_url missing')
+      }
 
-      setShortUrl(finalShort)
+      setShortUrl(short)
       setUrl('')
     } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Request timed out. Try again.')
-      } else {
-        setError(err.message || 'Something went wrong. Please try again.')
-      }
+      console.error('handleSubmit error', err)
+      const msg = err && err.message ? err.message : String(err)
+      setError(msg.length > 500 ? msg.slice(0, 500) + '...' : msg)
     } finally {
       setLoading(false)
     }
@@ -134,7 +150,6 @@ function App() {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(shortUrl)
       } else {
-        // fallback for older browsers
         const input = document.createElement('input')
         input.value = shortUrl
         document.body.appendChild(input)
@@ -144,7 +159,7 @@ function App() {
       }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
+    } catch {
       setError('Failed to copy to clipboard')
     }
   }
@@ -208,6 +223,17 @@ function App() {
                   </button>
                 </div>
               </div>
+            )}
+
+            <div className="pt-3 text-xs text-gray-500">
+              Debug: {debugInfo ? `status ${debugInfo.status}` : 'no response yet'}
+            </div>
+
+            {debugInfo && (
+              <details className="mt-2 text-xs text-gray-700">
+                <summary className="cursor-pointer underline">Show debug details (safe to share)</summary>
+                <pre className="whitespace-pre-wrap text-xs mt-2 bg-gray-50 p-2 rounded border">{JSON.stringify(debugInfo, null, 2)}</pre>
+              </details>
             )}
           </div>
         </div>
