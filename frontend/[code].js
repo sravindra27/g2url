@@ -13,10 +13,18 @@ export default async function handler(req, res) {
         res.status(500).send('Missing API_URL')
         return
       }
-  
+      const token = await getAuthToken()
       // Call your backend resolve endpoint (adjust path if different)
       const fetchUrl = `${API_URL}/v1/shorten/resolve/${encodeURIComponent(code)}`
-      const apiResp = await fetch(fetchUrl)
+      const apiResp = await fetch(fetchUrl,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          }
+        }
+      )
       if (apiResp.status === 200) {
         const data = await apiResp.json()
         const dest = data.original_url || data.url || data.target

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { API_URL, getAuthToken } from './config'
+import { API_URL, getAuthToken } from '../config'
 
 function App() {
   const [url, setUrl] = useState('')
