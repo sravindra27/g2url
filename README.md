@@ -197,17 +197,40 @@ VITE_API_URL=https://letmehelpyou-api-production.up.railway.app
 **Note:** 
 - The app uses the external API at `https://letmehelpyou-api-production.up.railway.app`
 - Authentication is handled automatically via guest token endpoint
-- Short URL redirects are handled by nginx proxying to the external API
-- See `NGINX_CONFIG_EXTERNAL_API.md` for nginx configuration details
+- Short URL redirects are handled by:
+  - **Vercel**: Serverless function at `api/redirect/[code].js` (see `VERCEL_DEPLOYMENT.md`)
+  - **Self-hosted**: Nginx proxying to the external API (see `NGINX_CONFIG_EXTERNAL_API.md`)
 
 ## Building for Production
 
-### Frontend
+### Frontend (Vercel Deployment)
+
+If deploying to Vercel:
+
+1. **Set Environment Variables in Vercel:**
+   - Go to Vercel Dashboard → Your Project → Settings → Environment Variables
+   - Add: `VITE_API_URL=https://letmehelpyou-api-production.up.railway.app`
+   - Apply to: Production, Preview, and Development
+
+2. **Deploy:**
+   ```bash
+   cd frontend
+   vercel --prod
+   ```
+   
+   Or connect your GitHub repository to Vercel for automatic deployments.
+
+3. **Short URL Redirects:**
+   - The `vercel.json` configuration handles short URL redirects
+   - Serverless function at `api/redirect/[code].js` proxies to external API
+   - See `VERCEL_DEPLOYMENT.md` for detailed setup
+
+### Frontend (Manual Build)
 
 1. Update the production environment variable:
    ```bash
    # Edit frontend/.env.production and set your production backend URL
-   VITE_API_URL=https://your-production-domain.com
+   VITE_API_URL=https://letmehelpyou-api-production.up.railway.app
    ```
 
 2. Build the frontend:

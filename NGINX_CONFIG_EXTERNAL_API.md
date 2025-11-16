@@ -20,25 +20,23 @@ server {
     }
 
     # Short code redirects - proxy to external API
-    # Matches exactly 6 alphanumeric characters (or custom codes)
-    # Note: External API uses custom codes which may vary in length
-    location ~ ^/[a-zA-Z0-9]+$ {
-        # Extract the short code from the URL
-        set $short_code $1;
+    # Matches any alphanumeric code (custom codes can vary in length)
+    # CRITICAL: Must come BEFORE frontend location block
+    location ~ ^/([a-zA-Z0-9]+)$ {
+        # Exclude paths that shouldn't be short codes
+        if ($1 ~ ^(api|health|debug|favicon|assets|static)$) {
+            break;
+        }
         
         # Proxy to external API redirect endpoint
-        proxy_pass https://letmehelpyou-api-production.up.railway.app/v1/shorten/redirect$request_uri;
+        proxy_pass https://letmehelpyou-api-production.up.railway.app/v1/shorten/redirect/$1;
         proxy_set_header Host letmehelpyou-api-production.up.railway.app;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Follow redirects
         proxy_redirect off;
-        
-        # Handle redirects from the API
-        proxy_intercept_errors on;
-        error_page 301 302 307 308 = @handle_redirect;
+        proxy_ssl_verify on;
+        proxy_ssl_server_name on;
     }
 
     # Handle redirects from external API
