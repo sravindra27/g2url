@@ -2,6 +2,9 @@
  * Vercel Serverless Function to handle short URL redirects
  * Route: /api/redirect/[code]
  */
+
+import { API_URL, getAuthToken } from '../../config'
+
 export default async function handler(req, res) {
   const { code } = req.query;
 
