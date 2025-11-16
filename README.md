@@ -5,11 +5,12 @@ A clean, lightweight, and fast URL shortener website built with React (frontend)
 ## Features
 
 - ✨ Clean and modern UI with Tailwind CSS
-- 🚀 Fast URL shortening with 6-character codes
+- 🚀 Fast URL shortening with custom codes
 - 📱 Fully responsive and mobile-friendly
 - 🔒 URL validation and error handling
 - 📋 One-click copy to clipboard
-- 💾 SQLite database for URL storage
+- 🔐 Automatic authentication token management
+- 🌐 Integrated with external URL shortening API
 
 ## Project Structure
 
@@ -38,8 +39,8 @@ g2url/
 
 ## Prerequisites
 
-- Python 3.8+ (for backend)
 - Node.js 16+ and npm (for frontend)
+- Internet connection (uses external API)
 
 ## Quick Start (Using Runner Scripts)
 
@@ -139,52 +140,65 @@ cd frontend
 
    The frontend will be available at `http://localhost:3000`
 
-## API Endpoints
+## API Integration
 
-### POST /api/shorten
-Shorten a long URL.
+This application uses an external API for URL shortening: [https://letmehelpyou-api-production.up.railway.app](https://letmehelpyou-api-production.up.railway.app)
 
-**Request:**
+### Authentication
+- **Endpoint:** `POST /v1/auth/guest-token`
+- **Description:** Automatically handled by the frontend to get access tokens
+- **Token Expiry:** 30 minutes (automatically refreshed)
+
+### Create Short URL
+- **Endpoint:** `POST /v1/shorten/create`
+- **Authentication:** Required (Bearer token)
+- **Request:**
 ```json
 {
-  "url": "https://example.com/very/long/url"
+  "original_url": "https://example.com/very/long/url",
+  "custom_code": "abc123",
+  "expires_in_days": 30,
+  "title": "",
+  "description": "",
+  "tags": [],
+  "domain": "default"
 }
 ```
 
-**Response:**
+- **Response:**
 ```json
 {
-  "short_code": "abc123",
-  "short_url": "https://g2url.in/abc123",
-  "long_url": "https://example.com/very/long/url"
+  "id": "ad3baca1-767d-49ff-9f57-cd8f1855f3c2",
+  "short_url": "https://letmehelpyou.in/abc123",
+  "original_url": "https://example.com/very/long/url",
+  "expires_at": "2025-12-16T07:47:45.761442Z",
+  "created_at": "2025-11-16T07:47:45.825479Z",
+  "access_count": 0,
+  "is_active": true
 }
 ```
 
-### GET /{short_code}
-Redirect to the original URL.
-
-**Example:** `GET /abc123` → Redirects to the original long URL
+### Redirect Short URL
+- **Endpoint:** `GET /v1/shorten/redirect/{short_code}`
+- **Description:** Handled by nginx proxying to the external API
+- **Example:** `GET /abc123` → Redirects to the original long URL
 
 ## Environment Variables
 
 ### Frontend Configuration
 
-The frontend uses environment variables to configure the API URL for different environments.
+The frontend uses environment variables to configure the external API URL.
 
-**Development** (`.env`):
+**Development/Production** (`.env` or `.env.production`):
 ```env
-VITE_BACKEND_URL=http://localhost:8000
-```
-
-**Production** (`.env.production`):
-```env
-VITE_API_URL=https://g2url.in
+VITE_API_URL=https://letmehelpyou-api-production.up.railway.app
 ```
 
 **Note:** 
-- In development, the Vite proxy automatically forwards `/api` requests to the backend
-- In production, the app uses the full `VITE_API_URL` to make API calls
-- Update `.env.production` with your actual production backend URL before building
+- The app uses the external API at `https://letmehelpyou-api-production.up.railway.app`
+- Authentication is handled automatically via guest token endpoint
+- Short URL redirects are handled by nginx proxying to the external API
+- See `NGINX_CONFIG_EXTERNAL_API.md` for nginx configuration details
 
 ## Building for Production
 

@@ -1,8 +1,70 @@
 # Troubleshooting Guide
 
-## URL Redirection Not Working
+## URL Redirection Not Working (404 Error)
 
-If short URLs like `https://g2url.in/OgSLXu` are not redirecting, check the following:
+If short URLs like `https://g2url.in/DE1hRd` are returning 404, follow these steps:
+
+### Step 1: Check if Short Code Exists in Database
+
+Run the diagnostic script:
+```bash
+cd /var/www/g2url/backend
+source venv/bin/activate
+python check_short_code.py DE1hRd
+```
+
+Or manually check:
+```bash
+python3 -c "import sqlite3; conn = sqlite3.connect('urls.db'); cursor = conn.cursor(); cursor.execute('SELECT * FROM urls WHERE short_code = ?', ('DE1hRd',)); print(cursor.fetchone()); conn.close()"
+```
+
+### Step 2: Test Backend Directly
+
+Test if the backend can handle the request:
+```bash
+curl -I http://localhost:8000/DE1hRd
+```
+
+Should return `307 Temporary Redirect` if working.
+
+### Step 3: Check Nginx Configuration
+
+The nginx config **MUST** have this exact order:
+
+```nginx
+# 1. API endpoints
+location /api { ... }
+
+# 2. Short code redirects (regex pattern)
+location ~ ^/[a-zA-Z0-9]{6}$ { ... }
+
+# 3. Frontend static files (LAST)
+location / { ... }
+```
+
+**Critical:** If the frontend `location /` comes before the short code regex, nginx will serve the frontend instead of proxying to the backend!
+
+### Step 4: Verify Nginx is Routing Correctly
+
+Check nginx access logs:
+```bash
+sudo tail -f /var/log/nginx/access.log
+```
+
+Then visit `https://g2url.in/DE1hRd` and see if the request appears in the logs.
+
+### Step 5: Test Debug Endpoint
+
+Visit: `https://g2url.in/debug/DE1hRd`
+
+This will tell you if:
+- The short code exists in the database
+- The backend is accessible
+- The route is working
+
+## URL Redirection Not Working (Other Issues)
+
+If short URLs are not redirecting for other reasons, check the following:
 
 ### 1. Check Nginx Configuration
 

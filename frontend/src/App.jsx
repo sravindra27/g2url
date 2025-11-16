@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { API_URL } from './config'
+import { API_URL, getAuthToken } from './config'
 
 function App() {
   const [url, setUrl] = useState('')
@@ -22,18 +22,49 @@ function App() {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_URL}/api/shorten`, {
+      // Get authentication token
+      const token = await getAuthToken()
+
+      // Extract domain from URL for custom code generation
+      let customCode = ''
+      try {
+        const urlObj = new URL(url.trim())
+        // Generate a simple code from domain (first 6 chars, alphanumeric only)
+        customCode = urlObj.hostname
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .substring(0, 6)
+          .toLowerCase()
+        // If empty, use a random code
+        if (!customCode) {
+          customCode = Math.random().toString(36).substring(2, 8)
+        }
+      } catch {
+        // If URL parsing fails, use random code
+        customCode = Math.random().toString(36).substring(2, 8)
+      }
+
+      // Call the external API
+      const response = await fetch(`${API_URL}/v1/shorten/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({
+          original_url: url.trim(),
+          custom_code: customCode,
+          expires_in_days: 30,
+          title: '',
+          description: '',
+          tags: [],
+          domain: 'default',
+        }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to shorten URL')
+        throw new Error(data.detail || data.message || 'Failed to shorten URL')
       }
 
       setShortUrl(data.short_url)
