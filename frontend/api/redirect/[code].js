@@ -1,106 +1,75 @@
-// /api/redirect/[code].js
-import fetch from 'node-fetch'; // optional: only if your environment needs it
-// If you use a local helper to fetch token, import it correctly.
-// e.g. import getAuthToken from '../../../lib/getAuthToken';
-import { getAuthToken } from '../../config'; // ensure this path is correct in your project
-
-const DEFAULT_API = 'https://letmehelpyou-api-production.up.railway.app';
-const FETCH_TIMEOUT_MS = 7000;
-
-function timeoutFetch(url, opts = {}, timeout = FETCH_TIMEOUT_MS) {
-  return Promise.race([
-    fetch(url, opts),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Fetch timeout')), timeout)
-    ),
-  ]);
-}
-
+/**
+ * Vercel Serverless Function to handle short URL redirects
+ * Route: /api/redirect/[code]
+ */
 export default async function handler(req, res) {
-  const rawCode = Array.isArray(req.query.code) ? req.query.code[0] : req.query.code;
-  const code = typeof rawCode === 'string' ? rawCode.trim() : '';
+  const { code } = req.query;
 
-  console.log('redirect handler hit for code=', code);
-
-  if (!code || !/^[a-zA-Z0-9-_]+$/.test(code)) {
-    return res.status(404).send('Not found');
+  // Validate code format (alphanumeric only)
+  if (!code || !/^[a-zA-Z0-9]+$/.test(code)) {
+    return res.status(404).json({ error: 'Invalid short code format' });
   }
 
-  const excluded = new Set(['api','health','debug','favicon','assets','static','_next']);
-  if (excluded.has(code.toLowerCase())) {
-    return res.status(404).send('Not found');
+  // Exclude common paths that shouldn't be treated as short codes
+  const excludedPaths = ['api', 'health', 'debug', 'favicon', 'assets', 'static', '_next'];
+  if (excludedPaths.includes(code.toLowerCase())) {
+    return res.status(404).json({ error: 'Not found' });
   }
-
-  // Resolve API URL
-  const apiUrl = process.env.API_URL || DEFAULT_API;
-  let token = null;
 
   try {
-    token = await getAuthToken();
-  } catch (err) {
-    console.error('getAuthToken error:', err && err.message ? err.message : err);
-    // If token generation is optional, continue without Authorization header
-    // Otherwise return 500 so you know token is required
-    return res.status(500).json({ error: 'Server token error' });
-  }
+    const apiUrl = process.env.VITE_API_URL || 'https://letmehelpyou-api-production.up.railway.app';
+    
+    // Call external API redirect endpoint
+    const response = await fetch(
+      `${apiUrl}/v1/shorten/redirect/${code}`,
+      {
+        method: 'GET',
+        redirect: 'manual', // Don't follow redirects automatically
+        headers: {
+          'User-Agent': 'g2url.in-redirect-service',
+        },
+      }
+    );
 
-  const endpoint = `${apiUrl.replace(/\/$/, '')}/v1/shorten/redirect/${encodeURIComponent(code)}`;
-
-  try {
-    const headers = {
-      'User-Agent': 'g2url.in-redirect-service',
-      Accept: 'application/json',
-    };
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    const response = await timeoutFetch(endpoint, { method: 'GET', redirect: 'manual', headers });
-
-    // If redirect status with Location header, forward it
-    const status = response.status;
-    console.log('API response status:', status);
-
-    if ([301,302,307,308].includes(status)) {
-      const location = response.headers.get('location') || response.headers.get('Location');
+    // Handle redirect responses (301, 302, 307, 308)
+    if (response.status === 301 || response.status === 302 || response.status === 307 || response.status === 308) {
+      const location = response.headers.get('location');
       if (location) {
-        console.log('Redirecting to location header:', location);
-        return res.redirect(status, location);
+        // Return redirect to the original URL
+        return res.redirect(response.status, location);
       }
     }
 
-    // If response is JSON and contains url fields, redirect
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      const url = data.original_url || data.url || data.redirect_url || data.location;
-      if (url) {
-        console.log('Redirecting to JSON url:', url);
-        return res.redirect(307, url);
-      }
+    // If 404, return not found
+    if (response.status === 404) {
+      return res.status(404).json({ error: 'Short URL not found' });
     }
 
-    // If API returned HTML with a meta redirect, try to parse location from it (best-effort)
-    if (contentType.includes('text/html')) {
-      const text = await response.text();
-      const metaMatch = text.match(/<meta[^>]+http-equiv=["']refresh["'][^>]*>/i);
-      if (metaMatch) {
-        const urlMatch = text.match(/url=['"]?([^'">]+)/i);
-        if (urlMatch && urlMatch[1]) {
-          return res.redirect(307, urlMatch[1]);
+    // Try to parse JSON response (in case API returns JSON with URL)
+    try {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data.original_url || data.url || data.redirect_url) {
+          return res.redirect(307, data.original_url || data.url || data.redirect_url);
         }
       }
+    } catch (parseError) {
+      // If JSON parsing fails, continue to error handling
     }
 
-    // Not found response handling
-    if (status === 404) {
-      return res.status(404).send('Short URL not found');
-    }
-
-    // Unexpected: return friendly page or JSON for debugging
-    console.error(`Unexpected API response for code ${code}: status=${status}`);
-    return res.status(502).json({ error: 'Bad gateway', status });
-
-  } catch (err) {
-    console.error('Redirect handler error:', err && err.stack ? err.stack : err);
-    return res.status(500).json({ error: 'Internal Server Error', message: String(err.message || err) });
+    // If we get here, something went wrong
+    console.error(`Unexpected response status: ${response.status} for code: ${code}`);
+    return res.status(500).json({ 
+      error: 'Failed to redirect',
+      message: `Unexpected response from API: ${response.status}`
+    });
+  } catch (error) {
+    console.error('Redirect error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
   }
 }
+
