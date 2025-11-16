@@ -123,6 +123,10 @@ async def shorten_url(request: ShortenRequest):
 @app.get("/{short_code}")
 async def redirect_url(short_code: str):
     """Redirect to the original URL"""
+    # Validate short_code format (alphanumeric, 6 characters)
+    if not short_code or len(short_code) != 6 or not short_code.isalnum():
+        raise HTTPException(status_code=404, detail="Invalid short URL format")
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT long_url FROM urls WHERE short_code = ?", (short_code,))
@@ -132,12 +136,41 @@ async def redirect_url(short_code: str):
     if not result:
         raise HTTPException(status_code=404, detail="Short URL not found")
     
-    return RedirectResponse(url=result[0])
+    # Use status_code=307 for temporary redirect (preserves method)
+    return RedirectResponse(url=result[0], status_code=307)
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {"message": "g2url.in URL Shortener API"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "g2url.in"}
+
+@app.get("/debug/{short_code}")
+async def debug_short_code(short_code: str):
+    """Debug endpoint to check if a short code exists"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT long_url, created_at FROM urls WHERE short_code = ?", (short_code,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return {
+            "exists": True,
+            "short_code": short_code,
+            "long_url": result[0],
+            "created_at": result[1]
+        }
+    else:
+        return {
+            "exists": False,
+            "short_code": short_code,
+            "message": "Short code not found in database"
+        }
 
 if __name__ == "__main__":
     import uvicorn

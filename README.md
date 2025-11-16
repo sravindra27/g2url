@@ -291,24 +291,29 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
        listen 80;
        server_name g2url.in www.g2url.in;
 
-       # Frontend
-       location / {
-           root /var/www/g2url/frontend/dist;
-           try_files $uri $uri/ /index.html;
-       }
-
-       # Backend API
+       # Backend API - must come before short code redirects
        location /api {
            proxy_pass http://localhost:8000;
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
        }
 
-       # Redirect endpoint
+       # Short code redirects - must come before frontend root
+       # Matches exactly 6 alphanumeric characters
        location ~ ^/[a-zA-Z0-9]{6}$ {
            proxy_pass http://localhost:8000;
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       # Frontend static files
+       location / {
+           root /var/www/g2url/frontend/dist;
+           try_files $uri $uri/ /index.html;
        }
    }
    ```
