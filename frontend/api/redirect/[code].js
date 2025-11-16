@@ -17,8 +17,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiUrl = process.env.VITE_API_URL || 'https://letmehelpyou-api-production.up.railway.app';
-    
+    const apiUrl = process.env.API_URL || 'https://letmehelpyou-api-production.up.railway.app';
+    const token = await getAuthToken()
     // Call external API redirect endpoint
     const response = await fetch(
       `${apiUrl}/v1/shorten/redirect/${code}`,
@@ -27,6 +27,7 @@ export default async function handler(req, res) {
         redirect: 'manual', // Don't follow redirects automatically
         headers: {
           'User-Agent': 'g2url.in-redirect-service',
+          'Authorization': `Bearer ${token}`,
         },
       }
     );
