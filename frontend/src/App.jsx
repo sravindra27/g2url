@@ -22,28 +22,22 @@ function App() {
     setLoading(true)
 
     try {
-      // Get authentication token
       const token = await getAuthToken()
 
-      // Extract domain from URL for custom code generation
       let customCode = ''
       try {
         const urlObj = new URL(url.trim())
-        // Generate a simple code from domain (first 6 chars, alphanumeric only)
         customCode = urlObj.hostname
           .replace(/[^a-zA-Z0-9]/g, '')
           .substring(0, 6)
           .toLowerCase()
-        // If empty, use a random code
         if (!customCode) {
           customCode = Math.random().toString(36).substring(2, 8)
         }
       } catch {
-        // If URL parsing fails, use random code
         customCode = Math.random().toString(36).substring(2, 8)
       }
 
-      // Call the external API
       const response = await fetch(`${API_URL}/v1/shorten/create`, {
         method: 'POST',
         headers: {
@@ -89,30 +83,31 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col">
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+          <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6 border border-amber-200">
+            
+            {/* Header */}
             <div className="text-center space-y-2">
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-extrabold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
                 Shorten Your Link
               </h1>
-              <p className="text-gray-600 text-sm">
-                Fast, simple, reliable — g2url.in
+              <p className="text-amber-600 font-medium text-sm tracking-wide">
+                Fast, simple, reliable - g2url.in
               </p>
             </div>
 
+            {/* Input Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Paste your long URL here..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                  disabled={loading}
-                />
-              </div>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste your long URL here..."
+                className="w-full px-4 py-3 border border-amber-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-400 outline-none transition-all bg-amber-50"
+                disabled={loading}
+              />
 
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -123,15 +118,16 @@ function App() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full bg-gradient-to-r from-orange-600 to-amber-600 text-white py-3 rounded-lg font-semibold hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {loading ? 'Shortening...' : 'Shorten URL'}
               </button>
             </form>
 
+            {/* Output */}
             {shortUrl && (
-              <div className="pt-4 border-t border-gray-200 space-y-3">
-                <p className="text-sm text-gray-600 font-medium">
+              <div className="pt-4 border-t border-amber-200 space-y-3">
+                <p className="text-sm text-orange-700 font-semibold">
                   Your shortened URL:
                 </p>
                 <div className="flex items-center gap-2">
@@ -139,11 +135,11 @@ function App() {
                     type="text"
                     value={shortUrl}
                     readOnly
-                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm font-mono text-indigo-600"
+                    className="flex-1 px-4 py-2 bg-amber-50 border border-amber-300 rounded-lg text-sm font-mono text-orange-600"
                   />
                   <button
                     onClick={handleCopy}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors text-sm font-medium whitespace-nowrap"
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors text-sm font-medium"
                   >
                     {copied ? 'Copied!' : 'Copy'}
                   </button>
@@ -154,7 +150,7 @@ function App() {
         </div>
       </main>
 
-      <footer className="py-6 text-center text-gray-600 text-sm">
+      <footer className="py-6 text-center text-amber-700 text-sm font-medium">
         © 2025 g2url.in | Simple URL Shortener
       </footer>
     </div>
